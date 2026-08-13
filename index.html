@@ -65,6 +65,28 @@
 <script type="text/babel" data-presets="react">
 const { useState, useRef, useEffect } = React;
 
+/* Bump this (and the matching version.json) on every deploy so open tabs get
+   prompted to reload instead of running stale code silently. */
+const APP_VERSION = "2026-08-14.2";
+function useVersionCheck() {
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch("version.json?_=" + Date.now(), { cache: "no-store" });
+        const data = await res.json();
+        if (data.version && data.version !== APP_VERSION) setUpdateAvailable(true);
+      } catch (e) {}
+    };
+    check();
+    const onVis = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", onVis);
+    const interval = setInterval(check, 45000);
+    return () => { document.removeEventListener("visibilitychange", onVis); clearInterval(interval); };
+  }, []);
+  return updateAvailable;
+}
+
 /* ---------- Firebase Realtime Database (REST, no SDK) ---------- */
 const DB_URL = "https://scs-toilet-truck-default-rtdb.asia-southeast1.firebasedatabase.app";
 
@@ -536,7 +558,8 @@ function LoginPage({ onAuthed }) {
       if (mode === "signup") {
         auth = await authSignUp(email, password);
         setCurrentIdToken(auth.idToken);
-        await saveOperatorProfile(auth.localId, { name: name.trim(), email, status: "pending", createdAt: Date.now() });
+        const autoApproved = email.trim().toLowerCase().endsWith("@alstomgroup.com");
+        await saveOperatorProfile(auth.localId, { name: name.trim(), email, status: autoApproved ? "approved" : "pending", createdAt: Date.now() });
       } else {
         auth = await authSignIn(email, password);
         setCurrentIdToken(auth.idToken);
@@ -585,6 +608,7 @@ function LoginPage({ onAuthed }) {
               <Icon path={ICONS.mail} size={15} color="var(--muted)" style={styles.inputIcon} />
               <input style={styles.inputIndented} type="email" autoCapitalize="none" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
+            {mode === "signup" && <span style={styles.fieldHint}>@alstomgroup.com addresses are approved automatically</span>}
           </Field>
           <Field label="Password">
             <div style={styles.inputWithIcon}>
@@ -652,6 +676,7 @@ function BugReportModal({ session, onClose, showToast }) {
 }
 
 function App() {
+  const updateAvailable = useVersionCheck();
   const [session, setSession] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [tab, setTab] = useState("log");
@@ -851,6 +876,12 @@ function App() {
 
       {toast && <div style={styles.toast}>{toast}</div>}
       {bugModalOpen && <BugReportModal session={session} onClose={() => setBugModalOpen(false)} showToast={showToast} />}
+      {updateAvailable && (
+        <div style={styles.updateBanner}>
+          <span><Icon path={ICONS.cloud} size={14} style={{ marginRight: 8 }} />A new version is available</span>
+          <button style={styles.updateReloadBtn} onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -874,6 +905,7 @@ const styles = {
   formGrid: { display: "flex", flexDirection: "column", gap: 0 },
   field: { display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 },
   fieldLabel: { fontSize: 11.5, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" },
+  fieldHint: { fontSize: 11, color: "var(--muted)", marginTop: 4 },
   input: { background: "var(--panel)", border: "1px solid var(--panel-3)", borderRadius: 9, padding: "10px 11px", color: "var(--chalk)", fontSize: 14.5, width: "100%" },
   select: { background: "var(--panel)", border: "1px solid var(--panel-3)", borderRadius: 9, padding: "10px 11px", color: "var(--chalk)", fontSize: 14.5, width: "100%" },
   textarea: { background: "var(--panel)", border: "1px solid var(--panel-3)", borderRadius: 9, padding: "10px 11px", color: "var(--chalk)", fontSize: 14.5, minHeight: 66, resize: "vertical", width: "100%" },
@@ -906,6 +938,8 @@ const styles = {
   notesSummary: { fontSize: 11.5, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em", cursor: "pointer" },
   submitBtn: { display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(155deg, var(--amber-light), var(--amber))", border: "none", borderRadius: 10, padding: "13px 16px", color: "#0E1A16", fontSize: 14.5, fontWeight: 700, cursor: "pointer", marginTop: 4, boxShadow: "0 6px 18px rgba(245,166,35,.2)" },
   toast: { position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", background: "linear-gradient(155deg, var(--amber-light), var(--amber))", color: "#0E1A16", padding: "10px 18px", borderRadius: 20, fontSize: 13, fontWeight: 700, boxShadow: "0 10px 28px rgba(0,0,0,.4)", maxWidth: "88vw", textAlign: "center" },
+  updateBanner: { position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", gap: 14, background: "var(--panel-2)", borderTop: "1px solid var(--amber-dim)", padding: "12px 16px", fontSize: 12.5, color: "var(--chalk)", fontWeight: 600 },
+  updateReloadBtn: { background: "var(--amber)", border: "none", borderRadius: 8, padding: "6px 14px", color: "#0E1A16", fontSize: 12, fontWeight: 700, cursor: "pointer" },
   offlineNote: { display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, color: "var(--muted)", textAlign: "center", padding: "18px 10px 4px" },
   loginWrap: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 },
   loginCard: { width: "100%", maxWidth: 380, background: "linear-gradient(165deg, var(--panel-2), var(--panel))", border: "1px solid var(--amber-dim)", borderRadius: 20, padding: "28px 26px", boxShadow: "0 20px 50px rgba(0,0,0,.5)" },
