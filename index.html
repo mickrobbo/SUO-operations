@@ -67,7 +67,7 @@ const { useState, useRef, useEffect } = React;
 
 /* Bump this (and the matching version.json) on every deploy so open tabs get
    prompted to reload instead of running stale code silently. */
-const APP_VERSION = "2026-08-14.2";
+const APP_VERSION = "2026-08-14.3";
 function useVersionCheck() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   useEffect(() => {
@@ -361,13 +361,17 @@ function FaultDetails({ f, set }) {
 
   return (
     <div style={styles.faultBox}>
-      <Field label="Fault code">
-        <select style={styles.select} value={f.faultCode} onChange={(e) => set("faultCode", e.target.value)}>
-          <option value="">None / not shown</option>
-          {TOILET_FAULT_CODES.map((c) => <option key={c.code} value={c.code}>CODE {c.code} — {c.name}</option>)}
-        </select>
-        {selected && <span style={styles.faultCodeHint}>{selected.description}</span>}
-      </Field>
+      {f.trainType === "Locomotive" ? (
+        <div style={styles.faultCodeHint}>Locomotive toilets are mechanical (no electrical fault codes) — use the checklist below and notes for detail.</div>
+      ) : (
+        <Field label="Fault code">
+          <select style={styles.select} value={f.faultCode} onChange={(e) => set("faultCode", e.target.value)}>
+            <option value="">None / not shown</option>
+            {TOILET_FAULT_CODES.map((c) => <option key={c.code} value={c.code}>CODE {c.code} — {c.name}</option>)}
+          </select>
+          {selected && <span style={styles.faultCodeHint}>{selected.description}</span>}
+        </Field>
+      )}
       <div style={styles.checkGrid}>
         {TOP_FLAGS.map(renderFlag)}
         {showMore && MORE_FLAGS.map(renderFlag)}
@@ -411,6 +415,9 @@ function ServiceForm({ onSubmitted, onReoccurring, operatorName }) {
     if (carOptions.length && !carOptions.includes(f.car)) set("car", carOptions[0]);
     if (!carOptions.length && f.car) set("car", "");
   }, [f.trainType, f.fleetNo]);
+  useEffect(() => {
+    if (f.trainType === "Locomotive" && f.faultCode) set("faultCode", "");
+  }, [f.trainType]);
 
   const submit = async (e) => {
     e.preventDefault();
