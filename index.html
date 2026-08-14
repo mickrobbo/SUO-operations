@@ -67,7 +67,7 @@ const { useState, useRef, useEffect } = React;
 
 /* Bump this (and the matching version.json) on every deploy so open tabs get
    prompted to reload instead of running stale code silently. */
-const APP_VERSION = "2026-08-14.3";
+const APP_VERSION = "2026-08-14.4";
 function useVersionCheck() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   useEffect(() => {
@@ -733,6 +733,15 @@ function App() {
     setCurrentIdToken(null);
     setSession(null);
   };
+
+  // Presence heartbeat — lets the Console's Admin tab show who's active right now
+  useEffect(() => {
+    if (!session || session.status !== "approved") return;
+    const beat = () => fbSet("presence", session.uid, { name: session.name, email: session.email, lastSeen: Date.now() }).catch(() => {});
+    beat();
+    const interval = setInterval(beat, 60000);
+    return () => clearInterval(interval);
+  }, [session]);
 
   // Poll for approval while pending, so the operator doesn't need to manually re-login
   useEffect(() => {
