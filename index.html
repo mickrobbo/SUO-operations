@@ -67,7 +67,7 @@ const { useState, useRef, useEffect } = React;
 
 /* Bump this (and the matching version.json) on every deploy so open tabs get
    prompted to reload instead of running stale code silently. */
-const APP_VERSION = "2026-08-14.5";
+const APP_VERSION = "2026-10-26.1";
 function useVersionCheck() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   useEffect(() => {
@@ -149,6 +149,13 @@ async function authRefresh(refreshToken) {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error?.message || "Session refresh failed");
   return { idToken: data.id_token, refreshToken: data.refresh_token, localId: data.user_id };
+}
+async function authSendPasswordReset(email) {
+  const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_API_KEY}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requestType: "PASSWORD_RESET", email }),
+  });
+  if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error?.message || "Reset failed"); }
 }
 function authErrorMessage(err) {
   const code = err.message || "";
@@ -553,10 +560,20 @@ function LoginPage({ onAuthed }) {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState("");
+
+  const forgot = async () => {
+    setError(""); setInfo("");
+    if (!email.trim()) { setError("Enter your email above first, then tap Forgot password."); return; }
+    setBusy(true);
+    try { await authSendPasswordReset(email.trim()); } catch (err) {}
+    setInfo("If that email is registered, a reset link is on its way.");
+    setBusy(false);
+  };
 
   const submit = async (e) => {
     e.preventDefault();
-    setError("");
+    setError(""); setInfo("");
     if (!email || !password) { setError("Enter your email and password."); return; }
     if (mode === "signup" && !name.trim()) { setError("Enter your name so entries can be attributed to you."); return; }
     setBusy(true);
@@ -634,9 +651,15 @@ function LoginPage({ onAuthed }) {
 
           {error && <div style={styles.loginError}><Icon path={ICONS.alert} size={13} style={{ marginRight: 6, flexShrink: 0 }} />{error}</div>}
 
+          {info && <div style={{ ...styles.loginError, color: "var(--muted)" }}>{info}</div>}
           <button type="submit" disabled={busy} style={{ ...styles.submitBtn, opacity: busy ? 0.6 : 1 }}>
             {busy ? "Please wait…" : mode === "login" ? "Log In" : "Sign Up"}
           </button>
+          {mode === "login" && (
+            <div style={{ textAlign: "center", marginTop: 8 }}>
+              <button type="button" onClick={forgot} disabled={busy} style={{ background: "none", border: "none", padding: 4, fontSize: 11, color: "var(--muted)", textDecoration: "underline", cursor: "pointer" }}>Forgot password?</button>
+            </div>
+          )}
         </form>
       </div>
     </div>
